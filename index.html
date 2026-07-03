@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Painel Gerencial - Análise Compras</title>
+<title>Livro de Compras — Painel Gerencial</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -66,7 +66,7 @@
     margin:0; letter-spacing:-0.01em; color:var(--ink);
   }
   .conn-box{
-    display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    display:none;
   }
   .conn-box input[type=text]{
     font-family:var(--font-mono); font-size:12px; padding:9px 12px;
@@ -1085,6 +1085,12 @@ function setStatus(msg, cls){
   const el = document.getElementById('statusPill');
   el.textContent = msg;
   el.className = 'status-pill ' + cls;
+  const box = document.querySelector('.conn-box');
+  if(cls === 'error'){
+    box.style.display = 'flex';
+  } else {
+    box.style.display = 'none';
+  }
 }
 
 /* ============ FORMATTERS ============ */
@@ -1120,6 +1126,7 @@ function exportCsv(){
 
 /* init */
 document.getElementById('emptyState').style.display = 'block';
+loadSheet();
 </script>
 </body>
 </html>
