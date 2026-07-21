@@ -146,7 +146,7 @@
 
   /* ---------- KPI LEDGER STRIP ---------- */
   .kpi-strip{
-    display:grid; grid-template-columns:repeat(5,1fr); gap:0;
+    display:grid; grid-template-columns:repeat(6,1fr); gap:0;
     background:var(--ink); border-radius:4px; overflow:hidden; margin-bottom:26px;
   }
   .kpi{
@@ -238,8 +238,9 @@
     padding:10px 14px; font-family:var(--font-mono); font-size:11px; color:var(--ink-soft);
     border-top:1px solid var(--line);
   }
+  .table-foot .pager{ display:flex; gap:6px; align-items:center; }
 
-  /* ---------- STATS TAB ---------- */
+  /* ---------- STATS & COMPARATIVO TAB ---------- */
   .stat-card{ margin-bottom:20px; }
   .stat-grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
   @media (max-width:900px){ .stat-grid-2{ grid-template-columns:1fr; } }
@@ -253,6 +254,7 @@
   .badge.risk-baixo{ background:#E1F0E6; color:var(--success); }
   .badge.tag-prazo{ background:#E9F2F0; color:var(--brass-dark); }
   .badge.tag-valor{ background:#F1E9F5; color:#6B4A8A; }
+  .badge.tag-transit{ background:#FBEBD3; color:#8A5A16; }
   .stat-note{
     font-family:var(--font-mono); font-size:11px; color:var(--ink-soft);
     background:var(--paper-alt); border:1px dashed var(--line); border-radius:4px;
@@ -261,7 +263,15 @@
   .z-val{ font-weight:700; }
   .z-val.neg{ color:var(--red); }
   .z-val.pos{ color:var(--teal-dark); }
-  .table-foot .pager{ display:flex; gap:6px; align-items:center; }
+  .cmp-controls{
+    display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:18px;
+  }
+  .cmp-controls select{
+    font-family:var(--font-mono); font-size:12.5px; padding:8px 10px;
+    border:1px solid var(--line); border-radius:2px; background:var(--paper);
+    color:var(--ink); min-width:190px;
+  }
+  .cmp-controls select:focus{ outline:2px solid var(--brass); outline-offset:1px; }
   .table-foot button{
     font-family:var(--font-mono); font-size:11px; padding:4px 10px; border:1px solid var(--line);
     background:var(--paper); border-radius:2px; cursor:pointer;
@@ -292,7 +302,7 @@
   <header class="top">
     <div>
       <div class="brand-eyebrow">Setor de Compras · Base CMP247</div>
-      <h1>Painel Estatístico de Compras </h1>
+      <h1>Livro de Compras — Painel Gerencial</h1>
     </div>
     <div class="conn-box">
       <span id="statusPill" class="status-pill idle">Aguardando conexão</span>
@@ -355,12 +365,17 @@
       <div class="label">Prazo Médio Ponderado</div>
       <div class="value" id="kpiPrazoPonderado">— <small>dias</small></div>
     </div>
+    <div class="kpi">
+      <div class="label">Transit Time Médio</div>
+      <div class="value" id="kpiTransitTime">— <small>dias</small></div>
+    </div>
   </div>
 
   <div class="tabs">
     <button class="tab-btn active" id="tabBtnOverview" onclick="switchTab('overview')">Visão Geral</button>
     <button class="tab-btn" id="tabBtnTrends" onclick="switchTab('trends')">Fornecedores &amp; Tendências</button>
     <button class="tab-btn" id="tabBtnStats" onclick="switchTab('stats')">Estatística</button>
+    <button class="tab-btn" id="tabBtnCompare" onclick="switchTab('compare')">Comparativo</button>
     <button class="tab-btn" id="tabBtnDetail" onclick="switchTab('detail')">Detalhamento</button>
   </div>
 
@@ -411,20 +426,27 @@
         <div class="chart-box"><canvas id="chartFluxoCaixa"></canvas></div>
       </div>
     </div>
+    <div class="chart-grid" style="grid-template-columns:1fr; margin-top:20px;">
+      <div class="card">
+        <h3>Transit time médio por fornecedor</h3>
+        <div class="sub">Dias entre Dt. Emissão e Dt. Entrada (tempo de viagem da mercadoria) — 10 fornecedores mais lentos</div>
+        <div class="chart-box" style="height:340px;"><canvas id="chartTransitFornecedor"></canvas></div>
+      </div>
+    </div>
   </div>
 
   <div class="tab-panel" id="panel-stats">
 
     <div class="card stat-card">
       <h3>Análise de dispersão e outliers</h3>
-      <div class="sub">Faturas que fogem do padrão habitual do fornecedor (prazo) ou da conta (valor)</div>
+      <div class="sub">Faturas que fogem do padrão habitual do fornecedor (prazo, transit time) ou da conta (valor)</div>
       <div class="table-wrap">
         <div class="table-scroll" style="max-height:420px;">
           <table id="tableOutliers">
             <thead>
               <tr>
                 <th>Tipo</th><th>Nota</th><th>Fornecedor</th><th>Conta</th>
-                <th>Dt. Emissão</th><th class="num">Prazo</th><th class="num">Valor Total</th>
+                <th>Dt. Emissão</th><th class="num">Prazo</th><th class="num">Transit</th><th class="num">Valor Total</th>
                 <th class="num">Desvio (z)</th><th>Motivo</th>
               </tr>
             </thead>
@@ -432,7 +454,7 @@
           </table>
         </div>
       </div>
-      <div class="stat-note">Um desvio (z) mede quantos desvios-padrão a fatura está distante da média do seu grupo (fornecedor, para prazo; conta contábil, para valor). Consideramos atípico |z| ≥ 2 para prazo e |z| ≥ 2,5 para valor, exigindo pelo menos 3 registros no grupo para ter uma base de comparação.</div>
+      <div class="stat-note">Um desvio (z) mede quantos desvios-padrão a fatura está distante da média do seu grupo (fornecedor, para prazo e transit time; conta contábil, para valor). Consideramos atípico |z| ≥ 2 para prazo/transit e |z| ≥ 2,5 para valor, exigindo pelo menos 3 registros no grupo para ter uma base de comparação.</div>
     </div>
 
     <div class="card stat-card">
@@ -504,6 +526,43 @@
 
   </div>
 
+  <div class="tab-panel" id="panel-compare">
+    <div class="card">
+      <h3>Comparação de períodos</h3>
+      <div class="sub">Compare um período específico com outro, ou com a média de todos os períodos disponíveis — com base na Dt. Entrada (respeita os filtros ativos)</div>
+      <div class="cmp-controls">
+        <div class="field">
+          <label>Período A</label>
+          <select id="cmpPeriodoA" onchange="renderComparativo()"></select>
+        </div>
+        <div class="field">
+          <label>Período B</label>
+          <select id="cmpPeriodoB" onchange="renderComparativo()"></select>
+        </div>
+        <button class="btn ghost" onclick="renderComparativo()">Atualizar</button>
+      </div>
+      <div id="cmpResumo"></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3>Variação por conta contábil</h3>
+      <div class="sub">Maiores contas em valor, comparando o Período A com o Período B acima</div>
+      <div class="chart-box" style="height:400px;"><canvas id="chartComparativoContas"></canvas></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3>Variação por fornecedor</h3>
+      <div class="sub">Maiores fornecedores em valor, comparando o Período A com o Período B acima</div>
+      <div class="chart-box" style="height:400px;"><canvas id="chartComparativoFornecedores"></canvas></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3>Variação por comprador</h3>
+      <div class="sub">Maiores compradores em valor, comparando o Período A com o Período B acima</div>
+      <div class="chart-box" style="height:400px;"><canvas id="chartComparativoCompradores"></canvas></div>
+    </div>
+  </div>
+
   <div class="tab-panel" id="panel-detail">
     <div class="table-wrap">
       <div class="table-scroll">
@@ -517,6 +576,7 @@
               <th>Dt. Emissão</th>
               <th>Dt. Vencimento</th>
               <th class="num">Prazo (dias)</th>
+              <th class="num">Transit (dias)</th>
               <th class="num">Valor Total</th>
             </tr>
           </thead>
@@ -567,7 +627,7 @@ const COMPRADOR_FALLBACK_COL_INDEX = 17; // coluna R (A=0)
 
 let rawRows = [];
 let filteredRows = [];
-let charts = { count:null, total:null, evolucao:null, topFornecedores:null, fluxoCaixa:null, sazonalidade:null, prazoComprador:null };
+let charts = { count:null, total:null, evolucao:null, topFornecedores:null, fluxoCaixa:null, transitFornecedor:null, sazonalidade:null, prazoComprador:null, comparativoContas:null, comparativoFornecedores:null, comparativoCompradores:null };
 let page = 1;
 const ROWS_PER_PAGE = 50;
 
@@ -703,6 +763,10 @@ function parseData(text){
     if(dtEmissao && dtVencimento){
       prazoPagamento = Math.round((dtVencimento - dtEmissao) / 86400000);
     }
+    let transitTime = null;
+    if(dtEmissao && dtEntrada){
+      transitTime = Math.round((dtEntrada - dtEmissao) / 86400000);
+    }
     return {
       codigoContabil: get('codigoContabil'),
       descricaoConta: get('descricaoConta') || 'Sem categoria',
@@ -713,7 +777,7 @@ function parseData(text){
       nota: get('nota'),
       ser: get('ser'),
       esp: get('esp'),
-      dtEmissao, dtEntrada, dtVencimento, prazoPagamento,
+      dtEmissao, dtEntrada, dtVencimento, prazoPagamento, transitTime,
       vlProdutos: num(get('vlProdutos')),
       vlIpi: num(get('vlIpi')),
       vlIcms: num(get('vlIcms')),
@@ -830,6 +894,8 @@ function renderAll(){
   renderCharts();
   renderResumoContabil();
   renderEstatisticas();
+  populateComparativoSelects();
+  renderComparativo();
   renderTable();
 }
 
@@ -839,10 +905,13 @@ function renderKPIs(){
   const prazoRows = filteredRows.filter(r => r.prazoPagamento !== null);
   const prazos = prazoRows.map(r => r.prazoPagamento);
   const prazoMedio = prazos.length ? (prazos.reduce((a,b) => a+b, 0) / prazos.length) : null;
-  const pesoTotal = prazoRows.reduce((s,r) => s + r.valorTotal, 0);
-  const prazoPonderado = pesoTotal > 0
-    ? prazoRows.reduce((s,r) => s + r.prazoPagamento * r.valorTotal, 0) / pesoTotal
+  const pesoPrazo = prazoRows.reduce((s,r) => s + r.valorTotal, 0);
+  const prazoPonderado = pesoPrazo > 0
+    ? prazoRows.reduce((s,r) => s + r.prazoPagamento * r.valorTotal, 0) / pesoPrazo
     : null;
+  const transitRows = filteredRows.filter(r => r.transitTime !== null);
+  const transitTimes = transitRows.map(r => r.transitTime);
+  const transitMedio = transitTimes.length ? (transitTimes.reduce((a,b) => a+b, 0) / transitTimes.length) : null;
   const ticket = n ? total / n : 0;
 
   document.getElementById('kpiCount').textContent = fmt(n);
@@ -850,6 +919,7 @@ function renderKPIs(){
   document.getElementById('kpiTicket').textContent = fmtBRL(ticket);
   document.getElementById('kpiPrazo').innerHTML = (prazoMedio !== null ? prazoMedio.toFixed(1) : '—') + ' <small>dias</small>';
   document.getElementById('kpiPrazoPonderado').innerHTML = (prazoPonderado !== null ? prazoPonderado.toFixed(1) : '—') + ' <small>dias</small>';
+  document.getElementById('kpiTransitTime').innerHTML = (transitMedio !== null ? transitMedio.toFixed(1) : '—') + ' <small>dias</small>';
 }
 
 function groupByCategoria(rows){
@@ -962,6 +1032,7 @@ function renderCharts(){
   renderTopFornecedores();
   renderEvolucaoMensal();
   renderFluxoCaixa();
+  renderTransitFornecedor();
 }
 
 /* ---- Top 5 fornecedores por custo ---- */
@@ -1093,6 +1164,53 @@ function renderFluxoCaixa(){
   });
 }
 
+/* ---- Transit time médio por fornecedor (Dt. Entrada - Dt. Emissão) ---- */
+function renderTransitFornecedor(){
+  const canvas = document.getElementById('chartTransitFornecedor');
+  if(!canvas) return;
+
+  const map = new Map();
+  filteredRows.forEach(r => {
+    if(r.transitTime === null) return;
+    const k = r.nomeFornecedor;
+    if(!map.has(k)) map.set(k, []);
+    map.get(k).push(r.transitTime);
+  });
+
+  const rows = Array.from(map.entries())
+    .map(([nome, vals]) => ({ nome, media: vals.reduce((a,b) => a+b, 0) / vals.length, n: vals.length }))
+    .sort((a,b) => b.media - a.media)
+    .slice(0, 10)
+    .sort((a,b) => a.media - b.media);
+
+  const ctx = canvas.getContext('2d');
+  if(charts.transitFornecedor) charts.transitFornecedor.destroy();
+  charts.transitFornecedor = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r.nome),
+      datasets: [{
+        data: rows.map(r => r.media),
+        backgroundColor: '#127078',
+        borderRadius: 2,
+        maxBarThickness: 22
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display:false },
+        tooltip: { callbacks: { label: c => ` ${c.raw.toFixed(1)} dias (${rows[c.dataIndex].n} notas)` } }
+      },
+      scales: {
+        x: { grid: { color:'#E9F1EF' }, ticks: { font: { family:'DM Mono', size:10 } }, title: { display:true, text:'dias', font:{ family:'DM Mono', size:10 } } },
+        y: { grid: { display:false }, ticks: { font: { family:'DM Mono', size:11 } } }
+      }
+    }
+  });
+}
+
 /* ---- Resumo por conta contábil (mês a mês) ---- */
 function monthLabelAccounting(key){
   const [y,m] = key.split('-');
@@ -1166,6 +1284,7 @@ function renderResumoContabil(){
   `;
 }
 
+/* ============ ESTATÍSTICA ============ */
 function renderEstatisticas(){
   renderOutliers();
   renderConcentracao();
@@ -1173,7 +1292,6 @@ function renderEstatisticas(){
   renderPrazoPorComprador();
 }
 
-/* ---- Helpers estatísticos ---- */
 function computeGroupStats(rows, keyFn, valueFn){
   const map = new Map();
   rows.forEach(r => {
@@ -1193,16 +1311,17 @@ function computeGroupStats(rows, keyFn, valueFn){
   return stats;
 }
 
-/* ---- 1. Dispersão e outliers ---- */
+/* ---- 1. Dispersão e outliers (prazo, transit time, valor) ---- */
 function renderOutliers(){
   const body = document.getElementById('outliersBody');
   if(!body) return;
   if(!filteredRows.length){
-    body.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:20px; color:var(--ink-soft);">Nenhum dado para exibir</td></tr>';
+    body.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:20px; color:var(--ink-soft);">Nenhum dado para exibir</td></tr>';
     return;
   }
 
   const prazoStats = computeGroupStats(filteredRows, r => r.nomeFornecedor, r => r.prazoPagamento);
+  const transitStats = computeGroupStats(filteredRows, r => r.nomeFornecedor, r => r.transitTime);
   const valorStats = computeGroupStats(filteredRows, r => r.descricaoConta, r => r.valorTotal);
 
   const anomalias = [];
@@ -1215,6 +1334,18 @@ function renderOutliers(){
           anomalias.push({
             row: r, tipo: 'prazo', z,
             motivo: `Prazo de ${r.prazoPagamento}d vs. média de ${st.mean.toFixed(0)}d para ${r.nomeFornecedor}`
+          });
+        }
+      }
+    }
+    if(r.transitTime !== null){
+      const stt = transitStats.get(r.nomeFornecedor);
+      if(stt && stt.n >= 3 && stt.std > 0){
+        const zt = (r.transitTime - stt.mean) / stt.std;
+        if(Math.abs(zt) >= 2){
+          anomalias.push({
+            row: r, tipo: 'transit', z: zt,
+            motivo: `Transit time de ${r.transitTime}d vs. média de ${stt.mean.toFixed(0)}d para ${r.nomeFornecedor}`
           });
         }
       }
@@ -1235,18 +1366,21 @@ function renderOutliers(){
   const top = anomalias.slice(0, 25);
 
   if(!top.length){
-    body.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:20px; color:var(--ink-soft);">Nenhuma anomalia relevante encontrada nos dados filtrados</td></tr>';
+    body.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:20px; color:var(--ink-soft);">Nenhuma anomalia relevante encontrada nos dados filtrados</td></tr>';
     return;
   }
 
+  const tipoLabel = { prazo:'Prazo', transit:'Transit', valor:'Valor' };
+
   body.innerHTML = top.map(a => `
     <tr>
-      <td><span class="badge tag-${a.tipo}">${a.tipo === 'prazo' ? 'Prazo' : 'Valor'}</span></td>
+      <td><span class="badge tag-${a.tipo}">${tipoLabel[a.tipo]}</span></td>
       <td>${a.row.nota || '—'}</td>
       <td>${a.row.nomeFornecedor}</td>
       <td>${a.row.descricaoConta}</td>
       <td>${fmtDate(a.row.dtEmissao)}</td>
       <td class="num">${a.row.prazoPagamento !== null ? a.row.prazoPagamento : '—'}</td>
+      <td class="num">${a.row.transitTime !== null ? a.row.transitTime : '—'}</td>
       <td class="num">${fmtBRL(a.row.valorTotal)}</td>
       <td class="num"><span class="z-val ${a.z < 0 ? 'neg' : 'pos'}">${a.z > 0 ? '+' : ''}${a.z.toFixed(2)}</span></td>
       <td>${a.motivo}</td>
@@ -1442,6 +1576,172 @@ function renderPrazoPorComprador(){
   `).join('');
 }
 
+/* ============ COMPARATIVO DE PERÍODOS ============ */
+function periodLabel(key){
+  if(key === 'avg') return 'Média de todos os períodos';
+  return monthLabelAccounting(key);
+}
+
+function getPeriodRows(key){
+  if(key === 'avg') return filteredRows;
+  return filteredRows.filter(r => monthKey(r.dtEntrada) === key); // comparação com base na Dt. Entrada
+}
+
+function getPeriodDivisor(key){
+  if(key === 'avg'){
+    const months = new Set(filteredRows.map(r => monthKey(r.dtEntrada)).filter(Boolean));
+    return months.size || 1;
+  }
+  return 1;
+}
+
+function populateComparativoSelects(){
+  const selA = document.getElementById('cmpPeriodoA');
+  const selB = document.getElementById('cmpPeriodoB');
+  if(!selA || !selB) return;
+
+  const months = Array.from(new Set(filteredRows.map(r => monthKey(r.dtEntrada)).filter(Boolean))).sort();
+  const options = ['<option value="avg">Média de todos os períodos</option>']
+    .concat(months.map(m => `<option value="${m}">${monthLabelAccounting(m)}</option>`)).join('');
+
+  const prevA = selA.value, prevB = selB.value;
+  selA.innerHTML = options;
+  selB.innerHTML = options;
+
+  if(prevA === 'avg' || months.includes(prevA)) selA.value = prevA;
+  else selA.value = months[0] || 'avg';
+
+  if(prevB === 'avg' || months.includes(prevB)) selB.value = prevB;
+  else selB.value = months[months.length - 1] || 'avg';
+}
+
+function buildPeriodMetrics(rows, divisor){
+  const n = rows.length;
+  const total = rows.reduce((s,r) => s + r.valorTotal, 0);
+  const ticket = n ? total / n : 0;
+
+  const prazoRows = rows.filter(r => r.prazoPagamento !== null);
+  const pesoPrazo = prazoRows.reduce((s,r) => s + r.valorTotal, 0);
+  const prazoPond = pesoPrazo > 0 ? prazoRows.reduce((s,r) => s + r.prazoPagamento * r.valorTotal, 0) / pesoPrazo : null;
+
+  const transitRows = rows.filter(r => r.transitTime !== null);
+  const pesoTransit = transitRows.reduce((s,r) => s + r.valorTotal, 0);
+  const transitPond = pesoTransit > 0 ? transitRows.reduce((s,r) => s + r.transitTime * r.valorTotal, 0) / pesoTransit : null;
+
+  return { n: n/divisor, total: total/divisor, ticket, prazoPond, transitPond };
+}
+
+function pctChange(a,b){
+  if(a === null || a === undefined || b === null || b === undefined || a === 0) return null;
+  return ((b-a)/Math.abs(a)) * 100;
+}
+
+function renderComparativo(){
+  const selA = document.getElementById('cmpPeriodoA');
+  const selB = document.getElementById('cmpPeriodoB');
+  const resumo = document.getElementById('cmpResumo');
+  if(!selA || !selB || !resumo) return;
+  const keyA = selA.value || 'avg';
+  const keyB = selB.value || 'avg';
+
+  const rowsA = getPeriodRows(keyA), rowsB = getPeriodRows(keyB);
+  const divA = getPeriodDivisor(keyA), divB = getPeriodDivisor(keyB);
+  const mA = buildPeriodMetrics(rowsA, divA), mB = buildPeriodMetrics(rowsB, divB);
+
+  const metricRows = [
+    { label:'Total gasto', a: mA.total, b: mB.total, fmt: fmtBRL },
+    { label:'Nº de compras', a: mA.n, b: mB.n, fmt: v => v.toLocaleString('pt-BR', { maximumFractionDigits:1 }) },
+    { label:'Ticket médio', a: mA.ticket, b: mB.ticket, fmt: fmtBRL },
+    { label:'Prazo médio ponderado', a: mA.prazoPond, b: mB.prazoPond, fmt: v => v.toFixed(1) + 'd' },
+    { label:'Transit time médio ponderado', a: mA.transitPond, b: mB.transitPond, fmt: v => v.toFixed(1) + 'd' }
+  ];
+
+  if(!rowsA.length && !rowsB.length){
+    resumo.innerHTML = '<div class="stat-note">Nenhum dado disponível para os períodos selecionados.</div>';
+    renderComparativoBreakdown('chartComparativoContas', 'comparativoContas', rowsA, divA, keyA, rowsB, divB, keyB, r => r.descricaoConta);
+    renderComparativoBreakdown('chartComparativoFornecedores', 'comparativoFornecedores', rowsA, divA, keyA, rowsB, divB, keyB, r => r.nomeFornecedor);
+    renderComparativoBreakdown('chartComparativoCompradores', 'comparativoCompradores', rowsA, divA, keyA, rowsB, divB, keyB, r => r.comprador);
+    return;
+  }
+
+  resumo.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Métrica</th><th class="num">${periodLabel(keyA)}</th><th class="num">${periodLabel(keyB)}</th><th class="num">Variação</th></tr>
+        </thead>
+        <tbody>
+          ${metricRows.map(m => {
+            const delta = pctChange(m.a, m.b);
+            return `
+            <tr>
+              <td>${m.label}</td>
+              <td class="num">${m.a !== null && m.a !== undefined ? m.fmt(m.a) : '—'}</td>
+              <td class="num">${m.b !== null && m.b !== undefined ? m.fmt(m.b) : '—'}</td>
+              <td class="num">${delta === null ? '—' : `<span class="z-val ${delta<0?'neg':'pos'}">${delta>0?'+':''}${delta.toFixed(1)}%</span>`}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  renderComparativoBreakdown('chartComparativoContas', 'comparativoContas', rowsA, divA, keyA, rowsB, divB, keyB, r => r.descricaoConta);
+  renderComparativoBreakdown('chartComparativoFornecedores', 'comparativoFornecedores', rowsA, divA, keyA, rowsB, divB, keyB, r => r.nomeFornecedor);
+  renderComparativoBreakdown('chartComparativoCompradores', 'comparativoCompradores', rowsA, divA, keyA, rowsB, divB, keyB, r => r.comprador);
+}
+
+function groupTotalsBy(rows, divisor, keyFn){
+  const map = new Map();
+  rows.forEach(r => {
+    const k = keyFn(r);
+    map.set(k, (map.get(k) || 0) + r.valorTotal);
+  });
+  map.forEach((v,k) => map.set(k, v/divisor));
+  return map;
+}
+
+/* Gráfico de variação genérico — usado para conta contábil, fornecedor e comprador */
+function renderComparativoBreakdown(canvasId, chartKey, rowsA, divA, keyA, rowsB, divB, keyB, keyFn){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+
+  const mapA = groupTotalsBy(rowsA, divA, keyFn);
+  const mapB = groupTotalsBy(rowsB, divB, keyFn);
+  const items = new Set([...mapA.keys(), ...mapB.keys()]);
+
+  const combined = Array.from(items).map(it => {
+    const a = mapA.get(it) || 0;
+    const b = mapB.get(it) || 0;
+    return { item: it, a, b, delta: Math.abs(b-a) };
+  }).sort((x,y) => y.delta - x.delta).slice(0, 12).sort((x,y) => (x.a+x.b) - (y.a+y.b));
+
+  const ctx = canvas.getContext('2d');
+  if(charts[chartKey]) charts[chartKey].destroy();
+  charts[chartKey] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: combined.map(c => c.item),
+      datasets: [
+        { label: periodLabel(keyA), data: combined.map(c => c.a), backgroundColor:'#8FC7BE', borderRadius:2, maxBarThickness:18 },
+        { label: periodLabel(keyB), data: combined.map(c => c.b), backgroundColor:'#127078', borderRadius:2, maxBarThickness:18 }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display:true, position:'top', labels:{ font:{ family:'DM Mono', size:10 }, boxWidth:12 } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmtBRL(c.raw)}` } }
+      },
+      scales: {
+        x: { grid: { color:'#E9F1EF' }, ticks: { font: { family:'DM Mono', size:10 }, callback: v => fmtBRLShort(v) } },
+        y: { grid: { display:false }, ticks: { font: { family:'DM Mono', size:10 } } }
+      }
+    }
+  });
+}
+
 function renderTable(){
   const sorted = [...filteredRows].sort((a,b) => (b.dtEmissao||0) - (a.dtEmissao||0));
   const totalPages = Math.max(1, Math.ceil(sorted.length / ROWS_PER_PAGE));
@@ -1458,9 +1758,10 @@ function renderTable(){
       <td>${fmtDate(r.dtEmissao)}</td>
       <td>${fmtDate(r.dtVencimento)}</td>
       <td class="num">${r.prazoPagamento !== null ? r.prazoPagamento : '—'}</td>
+      <td class="num">${r.transitTime !== null ? r.transitTime : '—'}</td>
       <td class="num">${fmtBRL(r.valorTotal)}</td>
     </tr>
-  `).join('') || '<tr><td colspan="8" style="text-align:center; padding:24px; color:#616B78;">Nenhum registro para os filtros aplicados</td></tr>';
+  `).join('') || '<tr><td colspan="9" style="text-align:center; padding:24px; color:#616B78;">Nenhum registro para os filtros aplicados</td></tr>';
 
   document.getElementById('pageInfo').textContent = `${fmt(sorted.length)} registros · página ${page} de ${totalPages}`;
   document.getElementById('prevBtn').disabled = page <= 1;
@@ -1477,10 +1778,12 @@ function switchTab(id){
   document.getElementById('panel-overview').classList.toggle('active', id === 'overview');
   document.getElementById('panel-trends').classList.toggle('active', id === 'trends');
   document.getElementById('panel-stats').classList.toggle('active', id === 'stats');
+  document.getElementById('panel-compare').classList.toggle('active', id === 'compare');
   document.getElementById('panel-detail').classList.toggle('active', id === 'detail');
   document.getElementById('tabBtnOverview').classList.toggle('active', id === 'overview');
   document.getElementById('tabBtnTrends').classList.toggle('active', id === 'trends');
   document.getElementById('tabBtnStats').classList.toggle('active', id === 'stats');
+  document.getElementById('tabBtnCompare').classList.toggle('active', id === 'compare');
   document.getElementById('tabBtnDetail').classList.toggle('active', id === 'detail');
 }
 
@@ -1511,13 +1814,14 @@ function fmtPct(n){ return Number(n||0).toLocaleString('pt-BR', { style:'percent
 /* ============ EXPORT ============ */
 function exportCsv(){
   if(!filteredRows.length){ return; }
-  const header = ['Nota','Fornecedor','Comprador','Descricao Conta','Dt. Emissao','Dt. Vencimento','Prazo (dias)','Valor Total'];
+  const header = ['Nota','Fornecedor','Comprador','Descricao Conta','Dt. Emissao','Dt. Vencimento','Prazo (dias)','Transit Time (dias)','Valor Total'];
   const lines = [header.join(';')];
   filteredRows.forEach(r => {
     lines.push([
       r.nota, r.nomeFornecedor, r.comprador, r.descricaoConta,
       fmtDate(r.dtEmissao), fmtDate(r.dtVencimento),
       r.prazoPagamento !== null ? r.prazoPagamento : '',
+      r.transitTime !== null ? r.transitTime : '',
       r.valorTotal.toFixed(2).replace('.',',')
     ].map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(';'));
   });
