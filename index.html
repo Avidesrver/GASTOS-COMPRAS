@@ -254,7 +254,7 @@
   .badge.risk-baixo{ background:#E1F0E6; color:var(--success); }
   .badge.tag-prazo{ background:#E9F2F0; color:var(--brass-dark); }
   .badge.tag-valor{ background:#F1E9F5; color:#6B4A8A; }
-  .badge.tag-transit{ background:#FBEBD3; color:#8A5A16; }
+  .badge.tag-lead{ background:#FBEBD3; color:#8A5A16; }
   .stat-note{
     font-family:var(--font-mono); font-size:11px; color:var(--ink-soft);
     background:var(--paper-alt); border:1px dashed var(--line); border-radius:4px;
@@ -366,8 +366,8 @@
       <div class="value" id="kpiPrazoPonderado">— <small>dias</small></div>
     </div>
     <div class="kpi">
-      <div class="label">Transit Time Médio</div>
-      <div class="value" id="kpiTransitTime">— <small>dias</small></div>
+      <div class="label">Lead Time Médio</div>
+      <div class="value" id="kpiLeadTime">— <small>dias</small></div>
     </div>
   </div>
 
@@ -428,9 +428,9 @@
     </div>
     <div class="chart-grid" style="grid-template-columns:1fr; margin-top:20px;">
       <div class="card">
-        <h3>Transit time médio por fornecedor</h3>
-        <div class="sub">Dias entre Dt. Emissão e Dt. Entrada (tempo de viagem da mercadoria) — 10 fornecedores mais lentos</div>
-        <div class="chart-box" style="height:340px;"><canvas id="chartTransitFornecedor"></canvas></div>
+        <h3>Lead time médio por fornecedor</h3>
+        <div class="sub">Dias entre Data de Emissão do Pedido e Dt. Entrada (tempo entre pedido e recebimento) — 10 fornecedores mais lentos</div>
+        <div class="chart-box" style="height:340px;"><canvas id="chartLeadTimeFornecedor"></canvas></div>
       </div>
     </div>
   </div>
@@ -439,14 +439,14 @@
 
     <div class="card stat-card">
       <h3>Análise de dispersão e outliers</h3>
-      <div class="sub">Faturas que fogem do padrão habitual do fornecedor (prazo, transit time) ou da conta (valor)</div>
+      <div class="sub">Faturas que fogem do padrão habitual do fornecedor (prazo, lead time) ou da conta (valor)</div>
       <div class="table-wrap">
         <div class="table-scroll" style="max-height:420px;">
           <table id="tableOutliers">
             <thead>
               <tr>
                 <th>Tipo</th><th>Nota</th><th>Fornecedor</th><th>Conta</th>
-                <th>Dt. Emissão</th><th class="num">Prazo</th><th class="num">Transit</th><th class="num">Valor Total</th>
+                <th>Dt. Emissão</th><th class="num">Prazo</th><th class="num">Lead Time</th><th class="num">Valor Total</th>
                 <th class="num">Desvio (z)</th><th>Motivo</th>
               </tr>
             </thead>
@@ -454,7 +454,7 @@
           </table>
         </div>
       </div>
-      <div class="stat-note">Um desvio (z) mede quantos desvios-padrão a fatura está distante da média do seu grupo (fornecedor, para prazo e transit time; conta contábil, para valor). Consideramos atípico |z| ≥ 2 para prazo/transit e |z| ≥ 2,5 para valor, exigindo pelo menos 3 registros no grupo para ter uma base de comparação.</div>
+      <div class="stat-note">Um desvio (z) mede quantos desvios-padrão a fatura está distante da média do seu grupo (fornecedor, para prazo e lead time; conta contábil, para valor). Consideramos atípico |z| ≥ 2 para prazo/lead time e |z| ≥ 2,5 para valor, exigindo pelo menos 3 registros no grupo para ter uma base de comparação.</div>
     </div>
 
     <div class="card stat-card">
@@ -576,7 +576,7 @@
               <th>Dt. Emissão</th>
               <th>Dt. Vencimento</th>
               <th class="num">Prazo (dias)</th>
-              <th class="num">Transit (dias)</th>
+              <th class="num">Lead Time (dias)</th>
               <th class="num">Valor Total</th>
             </tr>
           </thead>
@@ -621,13 +621,15 @@ const COLS = {
   valorTotal     : 'VALOR TOTAL',
   difAliquota    : 'DIF. ALIQUOTA',
   dtVencimento   : 'DATA DE VENCIMENTO',
-  comprador      : 'COMPRADOR'
+  comprador      : 'COMPRADOR',
+  dataEmissaoPedido : 'DATA DE EMISSAO DO PEDIDO'
 };
 const COMPRADOR_FALLBACK_COL_INDEX = 17; // coluna R (A=0)
+const DATA_EMISSAO_PEDIDO_FALLBACK_COL_INDEX = 19; // coluna T (A=0)
 
 let rawRows = [];
 let filteredRows = [];
-let charts = { count:null, total:null, evolucao:null, topFornecedores:null, fluxoCaixa:null, transitFornecedor:null, sazonalidade:null, prazoComprador:null, comparativoContas:null, comparativoFornecedores:null, comparativoCompradores:null };
+let charts = { count:null, total:null, evolucao:null, topFornecedores:null, fluxoCaixa:null, leadTimeFornecedor:null, sazonalidade:null, prazoComprador:null, comparativoContas:null, comparativoFornecedores:null, comparativoCompradores:null };
 let page = 1;
 const ROWS_PER_PAGE = 50;
 
@@ -752,20 +754,22 @@ function parseData(text){
     idxMap[key] = headers.indexOf(normalize(label));
   });
   if(idxMap.comprador === -1) idxMap.comprador = COMPRADOR_FALLBACK_COL_INDEX;
+  if(idxMap.dataEmissaoPedido === -1) idxMap.dataEmissaoPedido = DATA_EMISSAO_PEDIDO_FALLBACK_COL_INDEX;
 
   rawRows = table.slice(1).map(r => {
     const get = k => idxMap[k] >= 0 ? (r[idxMap[k]] || '').trim() : '';
     const dtEmissao = parseDateBR(get('dtEmissao'));
     const dtEntrada = parseDateBR(get('dtEntrada'));
     const dtVencimento = parseDateBR(get('dtVencimento'));
+    const dataEmissaoPedido = parseDateBR(get('dataEmissaoPedido'));
     const valorTotal = num(get('valorTotal'));
     let prazoPagamento = null;
     if(dtEmissao && dtVencimento){
       prazoPagamento = Math.round((dtVencimento - dtEmissao) / 86400000);
     }
-    let transitTime = null;
-    if(dtEmissao && dtEntrada){
-      transitTime = Math.round((dtEntrada - dtEmissao) / 86400000);
+    let leadTime = null;
+    if(dataEmissaoPedido && dtEntrada){
+      leadTime = Math.round((dtEntrada - dataEmissaoPedido) / 86400000);
     }
     return {
       codigoContabil: get('codigoContabil'),
@@ -777,7 +781,7 @@ function parseData(text){
       nota: get('nota'),
       ser: get('ser'),
       esp: get('esp'),
-      dtEmissao, dtEntrada, dtVencimento, prazoPagamento, transitTime,
+      dtEmissao, dtEntrada, dtVencimento, dataEmissaoPedido, prazoPagamento, leadTime,
       vlProdutos: num(get('vlProdutos')),
       vlIpi: num(get('vlIpi')),
       vlIcms: num(get('vlIcms')),
@@ -909,9 +913,9 @@ function renderKPIs(){
   const prazoPonderado = pesoPrazo > 0
     ? prazoRows.reduce((s,r) => s + r.prazoPagamento * r.valorTotal, 0) / pesoPrazo
     : null;
-  const transitRows = filteredRows.filter(r => r.transitTime !== null);
-  const transitTimes = transitRows.map(r => r.transitTime);
-  const transitMedio = transitTimes.length ? (transitTimes.reduce((a,b) => a+b, 0) / transitTimes.length) : null;
+  const leadRows = filteredRows.filter(r => r.leadTime !== null);
+  const leadTimes = leadRows.map(r => r.leadTime);
+  const leadMedio = leadTimes.length ? (leadTimes.reduce((a,b) => a+b, 0) / leadTimes.length) : null;
   const ticket = n ? total / n : 0;
 
   document.getElementById('kpiCount').textContent = fmt(n);
@@ -919,7 +923,7 @@ function renderKPIs(){
   document.getElementById('kpiTicket').textContent = fmtBRL(ticket);
   document.getElementById('kpiPrazo').innerHTML = (prazoMedio !== null ? prazoMedio.toFixed(1) : '—') + ' <small>dias</small>';
   document.getElementById('kpiPrazoPonderado').innerHTML = (prazoPonderado !== null ? prazoPonderado.toFixed(1) : '—') + ' <small>dias</small>';
-  document.getElementById('kpiTransitTime').innerHTML = (transitMedio !== null ? transitMedio.toFixed(1) : '—') + ' <small>dias</small>';
+  document.getElementById('kpiLeadTime').innerHTML = (leadMedio !== null ? leadMedio.toFixed(1) : '—') + ' <small>dias</small>';
 }
 
 function groupByCategoria(rows){
@@ -1032,7 +1036,7 @@ function renderCharts(){
   renderTopFornecedores();
   renderEvolucaoMensal();
   renderFluxoCaixa();
-  renderTransitFornecedor();
+  renderLeadTimeFornecedor();
 }
 
 /* ---- Top 5 fornecedores por custo ---- */
@@ -1164,17 +1168,17 @@ function renderFluxoCaixa(){
   });
 }
 
-/* ---- Transit time médio por fornecedor (Dt. Entrada - Dt. Emissão) ---- */
-function renderTransitFornecedor(){
-  const canvas = document.getElementById('chartTransitFornecedor');
+/* ---- Lead time médio por fornecedor (Dt. Entrada - Data de Emissão do Pedido) ---- */
+function renderLeadTimeFornecedor(){
+  const canvas = document.getElementById('chartLeadTimeFornecedor');
   if(!canvas) return;
 
   const map = new Map();
   filteredRows.forEach(r => {
-    if(r.transitTime === null) return;
+    if(r.leadTime === null) return;
     const k = r.nomeFornecedor;
     if(!map.has(k)) map.set(k, []);
-    map.get(k).push(r.transitTime);
+    map.get(k).push(r.leadTime);
   });
 
   const rows = Array.from(map.entries())
@@ -1184,8 +1188,8 @@ function renderTransitFornecedor(){
     .sort((a,b) => a.media - b.media);
 
   const ctx = canvas.getContext('2d');
-  if(charts.transitFornecedor) charts.transitFornecedor.destroy();
-  charts.transitFornecedor = new Chart(ctx, {
+  if(charts.leadTimeFornecedor) charts.leadTimeFornecedor.destroy();
+  charts.leadTimeFornecedor = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: rows.map(r => r.nome),
@@ -1311,7 +1315,7 @@ function computeGroupStats(rows, keyFn, valueFn){
   return stats;
 }
 
-/* ---- 1. Dispersão e outliers (prazo, transit time, valor) ---- */
+/* ---- 1. Dispersão e outliers (prazo, lead time, valor) ---- */
 function renderOutliers(){
   const body = document.getElementById('outliersBody');
   if(!body) return;
@@ -1321,7 +1325,7 @@ function renderOutliers(){
   }
 
   const prazoStats = computeGroupStats(filteredRows, r => r.nomeFornecedor, r => r.prazoPagamento);
-  const transitStats = computeGroupStats(filteredRows, r => r.nomeFornecedor, r => r.transitTime);
+  const leadStats = computeGroupStats(filteredRows, r => r.nomeFornecedor, r => r.leadTime);
   const valorStats = computeGroupStats(filteredRows, r => r.descricaoConta, r => r.valorTotal);
 
   const anomalias = [];
@@ -1338,14 +1342,14 @@ function renderOutliers(){
         }
       }
     }
-    if(r.transitTime !== null){
-      const stt = transitStats.get(r.nomeFornecedor);
+    if(r.leadTime !== null){
+      const stt = leadStats.get(r.nomeFornecedor);
       if(stt && stt.n >= 3 && stt.std > 0){
-        const zt = (r.transitTime - stt.mean) / stt.std;
+        const zt = (r.leadTime - stt.mean) / stt.std;
         if(Math.abs(zt) >= 2){
           anomalias.push({
-            row: r, tipo: 'transit', z: zt,
-            motivo: `Transit time de ${r.transitTime}d vs. média de ${stt.mean.toFixed(0)}d para ${r.nomeFornecedor}`
+            row: r, tipo: 'lead', z: zt,
+            motivo: `Lead time de ${r.leadTime}d vs. média de ${stt.mean.toFixed(0)}d para ${r.nomeFornecedor}`
           });
         }
       }
@@ -1370,7 +1374,7 @@ function renderOutliers(){
     return;
   }
 
-  const tipoLabel = { prazo:'Prazo', transit:'Transit', valor:'Valor' };
+  const tipoLabel = { prazo:'Prazo', lead:'Lead Time', valor:'Valor' };
 
   body.innerHTML = top.map(a => `
     <tr>
@@ -1380,7 +1384,7 @@ function renderOutliers(){
       <td>${a.row.descricaoConta}</td>
       <td>${fmtDate(a.row.dtEmissao)}</td>
       <td class="num">${a.row.prazoPagamento !== null ? a.row.prazoPagamento : '—'}</td>
-      <td class="num">${a.row.transitTime !== null ? a.row.transitTime : '—'}</td>
+      <td class="num">${a.row.leadTime !== null ? a.row.leadTime : '—'}</td>
       <td class="num">${fmtBRL(a.row.valorTotal)}</td>
       <td class="num"><span class="z-val ${a.z < 0 ? 'neg' : 'pos'}">${a.z > 0 ? '+' : ''}${a.z.toFixed(2)}</span></td>
       <td>${a.motivo}</td>
@@ -1624,11 +1628,11 @@ function buildPeriodMetrics(rows, divisor){
   const pesoPrazo = prazoRows.reduce((s,r) => s + r.valorTotal, 0);
   const prazoPond = pesoPrazo > 0 ? prazoRows.reduce((s,r) => s + r.prazoPagamento * r.valorTotal, 0) / pesoPrazo : null;
 
-  const transitRows = rows.filter(r => r.transitTime !== null);
-  const pesoTransit = transitRows.reduce((s,r) => s + r.valorTotal, 0);
-  const transitPond = pesoTransit > 0 ? transitRows.reduce((s,r) => s + r.transitTime * r.valorTotal, 0) / pesoTransit : null;
+  const leadRows = rows.filter(r => r.leadTime !== null);
+  const pesoLead = leadRows.reduce((s,r) => s + r.valorTotal, 0);
+  const leadPond = pesoLead > 0 ? leadRows.reduce((s,r) => s + r.leadTime * r.valorTotal, 0) / pesoLead : null;
 
-  return { n: n/divisor, total: total/divisor, ticket, prazoPond, transitPond };
+  return { n: n/divisor, total: total/divisor, ticket, prazoPond, leadPond };
 }
 
 function pctChange(a,b){
@@ -1653,7 +1657,7 @@ function renderComparativo(){
     { label:'Nº de compras', a: mA.n, b: mB.n, fmt: v => v.toLocaleString('pt-BR', { maximumFractionDigits:1 }) },
     { label:'Ticket médio', a: mA.ticket, b: mB.ticket, fmt: fmtBRL },
     { label:'Prazo médio ponderado', a: mA.prazoPond, b: mB.prazoPond, fmt: v => v.toFixed(1) + 'd' },
-    { label:'Transit time médio ponderado', a: mA.transitPond, b: mB.transitPond, fmt: v => v.toFixed(1) + 'd' }
+    { label:'Lead time médio ponderado', a: mA.leadPond, b: mB.leadPond, fmt: v => v.toFixed(1) + 'd' }
   ];
 
   if(!rowsA.length && !rowsB.length){
@@ -1758,7 +1762,7 @@ function renderTable(){
       <td>${fmtDate(r.dtEmissao)}</td>
       <td>${fmtDate(r.dtVencimento)}</td>
       <td class="num">${r.prazoPagamento !== null ? r.prazoPagamento : '—'}</td>
-      <td class="num">${r.transitTime !== null ? r.transitTime : '—'}</td>
+      <td class="num">${r.leadTime !== null ? r.leadTime : '—'}</td>
       <td class="num">${fmtBRL(r.valorTotal)}</td>
     </tr>
   `).join('') || '<tr><td colspan="9" style="text-align:center; padding:24px; color:#616B78;">Nenhum registro para os filtros aplicados</td></tr>';
@@ -1814,14 +1818,14 @@ function fmtPct(n){ return Number(n||0).toLocaleString('pt-BR', { style:'percent
 /* ============ EXPORT ============ */
 function exportCsv(){
   if(!filteredRows.length){ return; }
-  const header = ['Nota','Fornecedor','Comprador','Descricao Conta','Dt. Emissao','Dt. Vencimento','Prazo (dias)','Transit Time (dias)','Valor Total'];
+  const header = ['Nota','Fornecedor','Comprador','Descricao Conta','Dt. Emissao','Dt. Vencimento','Prazo (dias)','Lead Time (dias)','Valor Total'];
   const lines = [header.join(';')];
   filteredRows.forEach(r => {
     lines.push([
       r.nota, r.nomeFornecedor, r.comprador, r.descricaoConta,
       fmtDate(r.dtEmissao), fmtDate(r.dtVencimento),
       r.prazoPagamento !== null ? r.prazoPagamento : '',
-      r.transitTime !== null ? r.transitTime : '',
+      r.leadTime !== null ? r.leadTime : '',
       r.valorTotal.toFixed(2).replace('.',',')
     ].map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(';'));
   });
